@@ -408,6 +408,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 			writer.AppendLineInvariant("var nameScope = new global::Windows.UI.Xaml.NameScope();");
 			writer.AppendLineInvariant("NameScope.SetNameScope(this, nameScope);");
+			TrySetParsing(writer, topLevelControl, isInitializer: false);
 
 			RegisterAndBuildResources(writer, topLevelControl, isInInitializer: false);
 			BuildProperties(writer, topLevelControl, isInline: false, returnsContent: isDirectUserControlChild);
@@ -438,6 +439,11 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 			writer.AppendLineInvariant("OnInitializeCompleted();");
 			writer.AppendLineInvariant("InitializeXamlOwner();");
+			if (isDirectUserControlChild)
+			{
+				// For user controls, the Apply block is applied to the content, so we call CreationComplete() here
+				writer.AppendLineInvariant("CreationComplete();");
+			}
 		}
 
 		private void BuildPartials(IIndentedStringBuilder writer, bool isStatic)
@@ -2255,7 +2261,10 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 						BuildUiAutomationId(writer, closureName, uiAutomationId, objectDefinition);
 					}
 
-					if (isFrameworkElement)
+					if (isFrameworkElement
+							// If true then this apply block will be applied to the content of a UserControl, which will already have had CreationComplete() called in its own apply block.
+							&& !useChildTypeForNamedElement
+						)
 					{
 						// This should always be the last thing called when an element is parsed.
 						writer.AppendLineInvariant("{0}.CreationComplete();", closureName);
@@ -3461,7 +3470,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					{
 						using (writer.BlockInvariant("new {0}{1}", GetGlobalizedTypeName(fullTypeName), GenerateConstructorParameters(xamlObjectDefinition.Type)))
 						{
-							TrySetParsing(writer, xamlObjectDefinition);
+							TrySetParsing(writer, xamlObjectDefinition, isInitializer: true);
 							RegisterAndBuildResources(writer, xamlObjectDefinition, isInInitializer: true);
 							BuildLiteralProperties(writer, xamlObjectDefinition);
 							BuildProperties(writer, xamlObjectDefinition);
@@ -3477,11 +3486,12 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		/// <summary>
 		/// Set the 'IsParsing' flag. This should be the first property set when an element is parsed.
 		/// </summary>
-		private void TrySetParsing(IIndentedStringBuilder writer, XamlObjectDefinition objectDefinition)
+		private void TrySetParsing(IIndentedStringBuilder writer, XamlObjectDefinition objectDefinition, bool isInitializer)
 		{
 			if (IsFrameworkElement(objectDefinition.Type))
 			{
-				writer.AppendLineInvariant("IsParsing = true,");
+				writer.AppendLineInvariant("IsParsing = true");
+				writer.AppendLineInvariant(isInitializer ? "," : ";");
 			}
 		}
 
